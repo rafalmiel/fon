@@ -382,7 +382,7 @@ impl Channel for Ch64 {
 }
 
 impl Ch64 {
-    /// Create a new 32-bit [`Channel`](Channel) value.
+    /// Create a new 64-bit [`Channel`](Channel) value.
     #[inline(always)]
     pub const fn new(value: f64) -> Self {
         Self(value)

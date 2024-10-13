@@ -33,10 +33,12 @@ pub trait Channel:
     + Mul<Output = Self>
     + MulAssign
     + Neg<Output = Self>
+    + From<ChU8>
     + From<Ch16>
     + From<Ch24>
     + From<Ch32>
     + From<Ch64>
+    + Into<ChU8>
     + Into<Ch16>
     + Into<Ch24>
     + Into<Ch32>
@@ -62,6 +64,112 @@ pub trait Channel:
     #[inline(always)]
     fn lerp(self, rhs: Self, t: Self) -> Self {
         self + t * (rhs - self)
+    }
+}
+
+/// 8-bit sample [Channel](Channel).
+#[derive(Clone, Copy, Debug, Default, PartialEq, PartialOrd)]
+#[repr(transparent)]
+pub struct ChU8(u8);
+
+impl Channel for ChU8 {
+    const MIN: ChU8 = ChU8(0);
+    const MID: ChU8 = ChU8(128);
+    const MAX: ChU8 = ChU8(u8::MAX);
+
+    #[inline(always)]
+    fn to_f32(self) -> f32 {
+        const MULTIPLIER: f32 = 1.0 / 255.5;
+        (f32::from(self.0) + 0.5) * MULTIPLIER
+    }
+}
+
+impl ChU8 {
+    /// Create a new 8-bit [`Channel`](Channel) value.
+    #[inline(always)]
+    pub const fn new(value: u8) -> Self {
+        Self(value)
+    }
+}
+
+impl From<f32> for ChU8 {
+    #[inline(always)]
+    fn from(value: f32) -> Self {
+        Self::new(((value.clamp(-1.0, 1.0) * 127.5).floor() as i16 + 128) as u8)
+    }
+}
+
+impl From<Ch16> for ChU8 {
+    #[inline(always)]
+    fn from(ch: Ch16) -> Self {
+        Self::new(((ch.0 >> 8) + 128) as u8)
+    }
+}
+
+impl From<Ch24> for ChU8 {
+    #[inline(always)]
+    fn from(ch: Ch24) -> Self {
+        Self::new(((ch.0 >> 8) + 128) as u8)
+    }
+}
+
+impl From<Ch32> for ChU8 {
+    #[inline(always)]
+    fn from(ch: Ch32) -> Self {
+        Self::from(ch.0)
+    }
+}
+
+impl From<Ch64> for ChU8 {
+    #[inline(always)]
+    fn from(ch: Ch64) -> Self {
+        Self::from(ch.0 as f32)
+    }
+}
+
+impl From<ChU8> for u8 {
+    #[inline(always)]
+    fn from(ch: ChU8) -> u8 {
+        ch.0
+    }
+}
+
+impl<R: Into<Self>> Add<R> for ChU8 {
+    type Output = Self;
+
+    #[inline(always)]
+    fn add(self, rhs: R) -> Self {
+        Self::new(u8::from(self).saturating_add(u8::from(rhs.into())))
+    }
+}
+
+impl<R: Into<Self>> Sub<R> for ChU8 {
+    type Output = Self;
+
+    #[inline(always)]
+    fn sub(self, rhs: R) -> Self {
+        Self::new(u8::from(self).saturating_sub(u8::from(rhs.into())))
+    }
+}
+
+impl<R: Into<Self>> Mul<R> for ChU8 {
+    type Output = Self;
+
+    #[inline(always)]
+    fn mul(self, rhs: R) -> Self {
+        let l = u16::from(self.0);
+        let r = u16::from(rhs.into().0);
+        let v = (l * r) / 255;
+        Self::new(v as u8)
+    }
+}
+
+impl Neg for ChU8 {
+    type Output = ChU8;
+
+    #[inline(always)]
+    fn neg(self) -> Self {
+        Self::new(u8::MAX - u8::from(self))
     }
 }
 
@@ -94,6 +202,13 @@ impl From<f32> for Ch16 {
     #[inline(always)]
     fn from(value: f32) -> Self {
         Self::new((value.clamp(-1.0, 1.0) * 32_767.5).floor() as i16)
+    }
+}
+
+impl From<ChU8> for Ch16 {
+    #[inline(always)]
+    fn from(ch: ChU8) -> Self {
+        Self::new((ch.0 as i16 - 128) << 8)
     }
 }
 
@@ -203,6 +318,13 @@ impl From<f32> for Ch24 {
     }
 }
 
+impl From<ChU8> for Ch24 {
+    #[inline(always)]
+    fn from(ch: ChU8) -> Self {
+        Self((ch.0 as i16 - 128) << 8, 0u8)
+    }
+}
+
 impl From<Ch16> for Ch24 {
     #[inline(always)]
     fn from(ch: Ch16) -> Self {
@@ -301,6 +423,13 @@ impl From<f32> for Ch32 {
     }
 }
 
+impl From<ChU8> for Ch32 {
+    #[inline(always)]
+    fn from(ch: ChU8) -> Self {
+        Self::new(ch.to_f32())
+    }
+}
+
 impl From<Ch16> for Ch32 {
     #[inline(always)]
     fn from(ch: Ch16) -> Self {
@@ -396,6 +525,13 @@ impl From<f32> for Ch64 {
     }
 }
 
+impl From<ChU8> for Ch64 {
+    #[inline(always)]
+    fn from(ch: ChU8) -> Self {
+        Self::new(ch.to_f32() as f64)
+    }
+}
+
 impl From<Ch16> for Ch64 {
     #[inline(always)]
     fn from(ch: Ch16) -> Self {
@@ -460,6 +596,13 @@ impl Neg for Ch64 {
     }
 }
 
+impl AddAssign for ChU8 {
+    #[inline(always)]
+    fn add_assign(&mut self, rhs: Self) {
+        *self = *self + rhs;
+    }
+}
+
 impl AddAssign for Ch16 {
     #[inline(always)]
     fn add_assign(&mut self, rhs: Self) {
@@ -488,6 +631,13 @@ impl AddAssign for Ch64 {
     }
 }
 
+impl SubAssign for ChU8 {
+    #[inline(always)]
+    fn sub_assign(&mut self, rhs: Self) {
+        *self = *self - rhs;
+    }
+}
+
 impl SubAssign for Ch16 {
     #[inline(always)]
     fn sub_assign(&mut self, rhs: Self) {
@@ -513,6 +663,13 @@ impl SubAssign for Ch64 {
     #[inline(always)]
     fn sub_assign(&mut self, rhs: Self) {
         *self = *self - rhs;
+    }
+}
+
+impl MulAssign for ChU8 {
+    #[inline(always)]
+    fn mul_assign(&mut self, rhs: Self) {
+        *self = *self * rhs;
     }
 }
 

@@ -7,9 +7,10 @@
 // At your choosing (See accompanying files LICENSE_APACHE_2_0.txt,
 // LICENSE_MIT.txt and LICENSE_BOOST_1_0.txt).
 
-use crate::chan::{Ch16, Ch24, Ch32, Ch64};
+use crate::chan::{ChU8, Ch16, Ch24, Ch32, Ch64};
 
 pub trait Sealed {}
+impl Sealed for ChU8 {}
 impl Sealed for Ch16 {}
 impl Sealed for Ch24 {}
 impl Sealed for Ch32 {}

@@ -10,7 +10,7 @@
 #[cfg(not(test))]
 use crate::math::Libm;
 
-use crate::chan::{Ch16, Ch24, Ch32, Ch64, Channel};
+use crate::chan::{ChU8, Ch16, Ch24, Ch32, Ch64, Channel};
 use crate::frame::Frame;
 use crate::{Sink, Stream};
 
@@ -195,6 +195,39 @@ impl<Chan: Channel, const CH: usize> Sink<Chan, CH>
                 break;
             };
             self.index += 1;
+        }
+    }
+}
+
+impl<const CH: usize> Audio<ChU8, CH> {
+    /// Construct an `Audio` buffer from an `u8` buffer.
+    #[allow(unsafe_code)]
+    pub fn with_u8_buffer<B>(hz: u32, buffer: B) -> Self
+    where
+        B: Into<Box<[u8]>>,
+    {
+        let buffer: Box<[u8]> = buffer.into();
+        let bytes = buffer.len() * size_of::<u8>();
+        let len = bytes / size_of::<Frame<ChU8, CH>>();
+        assert_eq!(0, bytes % size_of::<Frame<ChU8, CH>>());
+        let slice = Box::<[u8]>::into_raw(buffer);
+        let frames: Box<[Frame<ChU8, CH>]> = unsafe {
+            let ptr = (*slice).as_mut_ptr() as *mut Frame<ChU8, CH>;
+            Box::from_raw(from_raw_parts_mut(ptr, len))
+        };
+        let frames: Vec<Frame<ChU8, CH>> = frames.into();
+        Audio::with_frames(hz, frames)
+    }
+
+    /// Get view of samples as an `i16` slice.
+    #[allow(unsafe_code)]
+    pub fn as_u8_slice(&mut self) -> &mut [u8] {
+        let frames = self.as_mut_slice();
+        unsafe {
+            let (prefix, v, suffix) = frames.align_to_mut::<u8>();
+            debug_assert!(prefix.is_empty());
+            debug_assert!(suffix.is_empty());
+            v
         }
     }
 }

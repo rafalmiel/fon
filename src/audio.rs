@@ -219,7 +219,7 @@ impl<const CH: usize> Audio<ChU8, CH> {
         Audio::with_frames(hz, frames)
     }
 
-    /// Get view of samples as an `i16` slice.
+    /// Get view of samples as an `u8` slice.
     #[allow(unsafe_code)]
     pub fn as_u8_slice(&mut self) -> &mut [u8] {
         let frames = self.as_mut_slice();

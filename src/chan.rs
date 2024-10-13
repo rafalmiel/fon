@@ -79,8 +79,8 @@ impl Channel for ChU8 {
 
     #[inline(always)]
     fn to_f32(self) -> f32 {
-        const MULTIPLIER: f32 = 1.0 / 255.5;
-        (f32::from(self.0) + 0.5) * MULTIPLIER
+        const MULTIPLIER: f32 = 1.0 / 127.5;
+        (f32::from(self.0 as i16 - 128) * MULTIPLIER).clamp(-1.0, 1.0)
     }
 }
 

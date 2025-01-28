@@ -27,10 +27,12 @@ pub trait Channel:
     + Mul<Output = Self>
     + MulAssign
     + Neg<Output = Self>
+    + From<Samp8>
     + From<Samp16>
     + From<Samp24>
     + From<Samp32>
     + From<Samp64>
+    + Into<Samp8>
     + Into<Samp16>
     + Into<Samp24>
     + Into<Samp32>
@@ -59,7 +61,100 @@ pub trait Channel:
     }
 }
 
-/// 16-bit audio [`Channel`].
+/// 8-bit sample [Channel](Channel).
+#[derive(Clone, Copy, Debug, Default, PartialEq, PartialOrd)]
+#[repr(transparent)]
+pub struct Samp8(u8);
+impl Channel for Samp8 {
+    const MIN: Samp8 = Samp8(0);
+    const MID: Samp8 = Samp8(128);
+    const MAX: Samp8 = Samp8(u8::MAX);
+    #[inline(always)]
+    fn to_f32(self) -> f32 {
+        const MULTIPLIER: f32 = 1.0 / 127.5;
+        (f32::from(self.0 as i16 - 128) * MULTIPLIER).clamp(-1.0, 1.0)
+    }
+}
+impl Samp8 {
+    /// Create a new 8-bit [`Channel`](Channel) value.
+    #[inline(always)]
+    pub const fn new(value: u8) -> Self {
+        Self(value)
+    }
+}
+impl From<f32> for Samp8 {
+    #[inline(always)]
+    fn from(value: f32) -> Self {
+        Self::new(((value.clamp(-1.0, 1.0) * 127.5).floor() as i16 + 128) as u8)
+    }
+}
+impl From<Samp16> for Samp8 {
+    #[inline(always)]
+    fn from(ch: Samp16) -> Self {
+        Self::new(((ch.0 >> 8) + 128) as u8)
+    }
+}
+impl From<Samp24> for Samp8 {
+    #[inline(always)]
+    fn from(ch: Samp24) -> Self {
+        Self::new(((ch.0 >> 8) + 128) as u8)
+    }
+}
+impl From<Samp32> for Samp8 {
+    #[inline(always)]
+    fn from(ch: Samp32) -> Self {
+        Self::from(ch.0)
+    }
+}
+impl From<Samp64> for Samp8 {
+    #[inline(always)]
+    fn from(ch: Samp64) -> Self {
+        Self::from(ch.0 as f32)
+    }
+}
+impl From<Samp8> for u8 {
+    #[inline(always)]
+    fn from(ch: Samp8) -> u8 {
+        ch.0
+    }
+}
+impl<R: Into<Self>> Add<R> for Samp8 {
+    type Output = Self;
+    #[inline(always)]
+    fn add(self, rhs: R) -> Self {
+        let l = self.0 as i16 - (Self::MID.0 as i16);
+        let r = rhs.into().0 as i16 - (Self::MID.0 as i16);
+        Self::new(((l + r).clamp(-128, 127) + 128) as u8)
+    }
+}
+impl<R: Into<Self>> Sub<R> for Samp8 {
+    type Output = Self;
+    #[inline(always)]
+    fn sub(self, rhs: R) -> Self {
+        let l = self.0 as i16 - (Self::MID.0 as i16);
+        let r = rhs.into().0 as i16 - (Self::MID.0 as i16);
+        Self::new(((l - r).clamp(-128, 127) + 128) as u8)
+    }
+}
+impl<R: Into<Self>> Mul<R> for Samp8 {
+    type Output = Self;
+    #[inline(always)]
+    fn mul(self, rhs: R) -> Self {
+        let l = self.0 as i16 - (Self::MID.0 as i16);
+        let r = rhs.into().0 as i16 - (Self::MID.0 as i16);
+        let v = (l * r) / 127;
+        Self::new((v.clamp(-128, 127) + 128) as u8)
+    }
+}
+impl Neg for Samp8 {
+    type Output = Samp8;
+    #[inline(always)]
+    fn neg(self) -> Self {
+        Self::new(u8::MAX - u8::from(self))
+    }
+}
+
+/// 16-bit sample [`Sample`].
 #[derive(Clone, Copy, Debug, Default, PartialEq, PartialOrd)]
 #[repr(transparent)]
 pub struct Samp16(i16);
@@ -88,6 +183,13 @@ impl From<f32> for Samp16 {
     #[inline(always)]
     fn from(value: f32) -> Self {
         Self::new((value.clamp(-1.0, 1.0) * 32_767.5).floor() as i16)
+    }
+}
+
+impl From<Samp8> for Samp16 {
+    #[inline(always)]
+    fn from(ch: Samp8) -> Self {
+        Self::new((ch.0 as i16 - 128) << 8)
     }
 }
 
@@ -197,6 +299,13 @@ impl From<f32> for Samp24 {
     }
 }
 
+impl From<Samp8> for Samp24 {
+    #[inline(always)]
+    fn from(ch: Samp8) -> Self {
+        Self((ch.0 as i16 - 128) << 8, 0u8)
+    }
+}
+
 impl From<Samp16> for Samp24 {
     #[inline(always)]
     fn from(ch: Samp16) -> Self {
@@ -295,6 +404,13 @@ impl From<f32> for Samp32 {
     }
 }
 
+impl From<Samp8> for Samp32 {
+    #[inline(always)]
+    fn from(ch: Samp8) -> Self {
+        Self::new(ch.to_f32())
+    }
+}
+
 impl From<Samp16> for Samp32 {
     #[inline(always)]
     fn from(ch: Samp16) -> Self {
@@ -390,6 +506,13 @@ impl From<f32> for Samp64 {
     }
 }
 
+impl From<Samp8> for Samp64 {
+    #[inline(always)]
+    fn from(ch: Samp8) -> Self {
+        Self::new(ch.to_f32() as f64)
+    }
+}
+
 impl From<Samp16> for Samp64 {
     #[inline(always)]
     fn from(ch: Samp16) -> Self {
@@ -454,6 +577,13 @@ impl Neg for Samp64 {
     }
 }
 
+impl AddAssign for Samp8 {
+    #[inline(always)]
+    fn add_assign(&mut self, rhs: Self) {
+        *self = *self + rhs;
+    }
+}
+
 impl AddAssign for Samp16 {
     #[inline(always)]
     fn add_assign(&mut self, rhs: Self) {
@@ -482,6 +612,13 @@ impl AddAssign for Samp64 {
     }
 }
 
+impl SubAssign for Samp8 {
+    #[inline(always)]
+    fn sub_assign(&mut self, rhs: Self) {
+        *self = *self - rhs;
+    }
+}
+
 impl SubAssign for Samp16 {
     #[inline(always)]
     fn sub_assign(&mut self, rhs: Self) {
@@ -507,6 +644,13 @@ impl SubAssign for Samp64 {
     #[inline(always)]
     fn sub_assign(&mut self, rhs: Self) {
         *self = *self - rhs;
+    }
+}
+
+impl MulAssign for Samp8 {
+    #[inline(always)]
+    fn mul_assign(&mut self, rhs: Self) {
+        *self = *self * rhs;
     }
 }
 
@@ -541,6 +685,28 @@ impl MulAssign for Samp64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn ch8() {
+        assert_eq!(-1.0, Samp8::MIN.to_f32());
+        assert_eq!(0.000015259022, Samp16::MID.to_f32());
+        assert_eq!(0.9960785, Samp8::MAX.to_f32());
+
+        assert_eq!(Samp8::MIN, Samp8::from(Samp8::MIN.to_f32()));
+        assert_eq!(Samp8::MID, Samp8::from(Samp8::MID.to_f32()));
+        assert_eq!(Samp8::MAX, Samp8::from(Samp8::MAX.to_f32()));
+    }
+
+    #[test]
+    fn ch8_roundtrip() {
+        assert_eq!(0, u8::from(Samp8::MIN));
+        assert_eq!(128, u8::from(Samp8::MID));
+        assert_eq!(255, u8::from(Samp8::MAX));
+
+        assert_eq!(Samp8::MIN, Samp8::new(u8::from(Samp8::MIN)));
+        assert_eq!(Samp8::MID, Samp8::new(u8::from(Samp8::MID)));
+        assert_eq!(Samp8::MAX, Samp8::new(u8::from(Samp8::MAX)));
+    }
 
     #[test]
     fn ch16() {
@@ -620,6 +786,75 @@ mod tests {
         assert_eq!(Samp16::MIN, Samp16::from(Samp24::MIN));
         assert_eq!(Samp16::MID, Samp16::from(Samp24::MID));
         assert_eq!(Samp16::MAX, Samp16::from(Samp24::MAX));
+    }
+
+    #[test]
+    fn ch16_to_ch8() {
+        assert_eq!(Samp8::MIN, Samp8::from(Samp16::MIN));
+        assert_eq!(Samp8::MID, Samp8::from(Samp16::MID));
+        assert_eq!(Samp8::MAX, Samp8::from(Samp16::MAX));
+    }
+
+    #[test]
+    fn ch24_to_ch8() {
+        assert_eq!(Samp8::MIN, Samp8::from(Samp24::MIN));
+        assert_eq!(Samp8::MID, Samp8::from(Samp24::MID));
+        assert_eq!(Samp8::MAX, Samp8::from(Samp24::MAX));
+    }
+
+    #[test]
+    fn ch8_to_ch16() {
+        assert_eq!(Samp16::MIN, Samp16::from(Samp8::MIN));
+        assert_eq!(Samp16::MID, Samp16::from(Samp8::MID));
+        assert_eq!(Samp16::new(32512), Samp16::from(Samp8::MAX));
+    }
+
+    #[test]
+    fn ch8_to_ch24() {
+        assert_eq!(Samp24::MIN, Samp24::from(Samp8::MIN));
+        assert_eq!(Samp24::MID, Samp24::from(Samp8::MID));
+        assert_eq!(Samp24::new(32512 << 8), Samp24::from(Samp8::MAX));
+    }
+
+    #[test]
+    fn ch8_arith() {
+        // Test addition
+        assert_eq!(Samp8::new(201), Samp8::new(200) + Samp8::new(129));
+        assert_eq!(Samp8::MIN, Samp8::MIN + Samp8::MIN);
+        assert_eq!(Samp8::new(112), Samp8::new(100) + Samp8::new(140));
+        assert_eq!(Samp8::MID, Samp8::new(128) + Samp8::new(128));
+        // Test subtraction
+        assert_eq!(Samp8::MID, Samp8::MIN - Samp8::MIN);
+        assert_eq!(Samp8::MID, Samp8::new(180) - Samp8::new(180));
+        assert_eq!(Samp8::MID, Samp8::new(255) - Samp8::new(255));
+        assert_eq!(Samp8::MIN, Samp8::new(127) - Samp8::MAX);
+        // Test multiplication
+        assert_eq!(Samp8::new(255), Samp8::new(255) * Samp8::new(255));
+        assert_eq!(
+            Samp8::new(233),
+            Samp8::new(12) * Samp8::new(12)
+        );
+        assert_eq!(
+            Samp8::new(0),
+            Samp8::new(255) * Samp8::new(0)
+        );
+        assert_eq!(
+            Samp8::new(0),
+            Samp8::new(0) * Samp8::new(255)
+        );
+        assert_eq!(
+            Samp8::new(255),
+            Samp8::new(0) * Samp8::new(0)
+        );
+        assert_eq!(
+            Samp8::new(64),
+            Samp8::new(255) * Samp8::new(64)
+        );
+        // Test negation
+        assert_eq!(Samp8::MIN, -Samp8::MAX);
+        assert_eq!(Samp8::MAX, -Samp8::MIN);
+        assert_eq!(Samp8::new(127), -Samp8::MID);
+        assert_eq!(Samp8::new(128), -Samp8::new(127));
     }
 
     #[test]
@@ -755,6 +990,13 @@ mod tests {
         assert_eq!(Samp64::MIN, -Samp64::MAX);
         assert_eq!(Samp64::MAX, -Samp64::MIN);
         assert_eq!(Samp64::new(0.0), -Samp64::new(0.0));
+    }
+
+    #[test]
+    fn ch8_saturation() {
+        assert_eq!(Samp8::MAX, Samp8::new(233) + Samp8::new(220));
+        assert_eq!(Samp8::MIN, Samp8::new(32) + Samp8::new(48));
+        assert_eq!(Samp8::MIN, Samp8::new(32) - Samp8::new(176));
     }
 
     #[test]
